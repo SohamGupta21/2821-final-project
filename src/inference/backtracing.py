@@ -150,3 +150,4 @@ class ContradictionBacktracer:
                     return True  # Theory proves false fact - too strong!
         return False
 
+

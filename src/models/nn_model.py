@@ -201,3 +201,4 @@ def generate_synthetic_loan_data(
     
     return X, y, feature_names
 
+

@@ -204,3 +204,4 @@ def compose_substitutions(sub1: Dict[Variable, Term], sub2: Dict[Variable, Term]
     
     return composed
 
+

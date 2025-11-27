@@ -1,28 +1,14 @@
 # Shapiro's Model Inference for Neural Network Explainability
 
-This project implements **Ehud Shapiro's Model Inference Algorithm (1981)** as an explainability system for black-box neural network models. The system infers logical Horn clause rules that explain model behavior by querying the model and using contradiction backtracing and refinement operators.
+This project implements **Ehud Shapiro's Model Inference Algorithm (1981)** as an explainability system for black-box machine learning models. The system infers logical Horn clause rules that explain model behavior.
 
-## Overview
+## Features
 
-Given a black-box neural network (e.g., feedforward classifier), this system:
-1. Queries the model on input instances
-2. Observes input features and model predictions
-3. Infers logical rules (Horn clauses) that explain the model's behavior
-4. Refines rules through contradiction backtracing and refinement operators
-
-## Project Structure
-
-```
-2821-final-project/
-├── src/
-│   ├── core/           # Core logical reasoning (atoms, clauses, resolution)
-│   ├── inference/      # Model inference engine (oracle, backtracing, refinement)
-│   ├── models/         # Neural network models and wrappers
-│   ├── demos/          # Demo scripts
-│   └── utils/          # Visualization utilities
-├── tests/              # Unit tests
-└── notebooks/          # Jupyter notebooks
-```
+- **Plug-and-Play**: Explain any model with just 2 lines of code
+- **Framework Agnostic**: Works with scikit-learn, PyTorch, TensorFlow, and custom models
+- **Data Type Support**: Tabular, image, and text data
+- **Interpretable Output**: Human-readable logical rules
+- **Metrics**: Rule coverage, interpretability scores
 
 ## Installation
 
@@ -32,185 +18,234 @@ pip install -r requirements.txt
 
 ## Quick Start
 
+### One-Liner Explanation
+
 ```python
-from src.models.nn_model import SimpleNNClassifier
-from src.models.model_wrapper import wrap_nn
-from src.inference.algorithm import ModelInference
+from src import explain_model
 
-# Train or load a neural network
-model = SimpleNNClassifier(...)
-model.train(...)
-
-# Wrap model as oracle
-oracle = wrap_nn(model, feature_names, label_map)
-
-# Run model inference
-inference = ModelInference(oracle)
-theory = inference.infer_theory(fact_stream)
-
-# Display learned rules
-from src.utils.visualization import display_rules
-display_rules(theory)
+# Explain any trained model!
+print(explain_model(model, X))
 ```
 
-## Example: Loan Approval Classifier
+### Detailed Analysis
 
-See `src/demos/classification_demo.py` for a complete example that:
-- Trains a simple feedforward NN on loan approval data
-- Learns logical rules explaining the model's decisions
-- Visualizes rule evolution over time
+```python
+from src import create_explainer
 
-## Key Components
+# Create explainer with full control
+result = create_explainer(
+    model=model,
+    X=X_test,
+    feature_names=["age", "income", "credit_score"],
+    label_names=["denied", "approved"]
+)
 
-- **Core**: Atom representation, Horn clauses, SLD resolution engine
-- **Inference**: Oracle interface, contradiction backtracing, refinement operators
-- **Models**: Simple feedforward NN classifier with tabular data
-- **Algorithm**: Incremental Algorithm 2 from Shapiro (1981)
+# View summary
+print(result.summary())
+
+# Access learned rules
+for rule in result.rules:
+    print(rule)
+
+# Explain specific predictions
+explanation = result.explain_prediction(instance_id=0)
+print(f"Prediction: {explanation['prediction']}")
+print(f"Key features: {explanation['key_features']}")
+
+# Get metrics
+metrics = result.compute_metrics()
+print(f"Rule coverage: {metrics['rule_coverage']*100:.1f}%")
+```
+
+## Supported Models
+
+### scikit-learn
+```python
+from sklearn.ensemble import RandomForestClassifier
+model = RandomForestClassifier().fit(X_train, y_train)
+result = create_explainer(model, X_test)
+```
+
+### PyTorch
+```python
+import torch.nn as nn
+model = MyPyTorchModel()
+model.load_state_dict(torch.load("model.pt"))
+result = create_explainer(model, X_test)
+```
+
+### TensorFlow/Keras
+```python
+from tensorflow import keras
+model = keras.models.load_model("model.h5")
+result = create_explainer(model, X_test)
+```
+
+### Custom Models
+```python
+class MyModel:
+    def predict(self, X):
+        # Your prediction logic
+        return predictions
+
+result = create_explainer(MyModel(), X_test)
+```
+
+## Data Types
+
+### Tabular Data (default)
+```python
+result = create_explainer(
+    model, X,
+    feature_names=["age", "income"],
+    data_type="tabular",
+    discretize=True
+)
+```
+
+### Image Data
+```python
+result = create_explainer(
+    model, images,
+    data_type="image",
+    image_size=(28, 28),
+    grid_size=4
+)
+```
+
+### Text Data
+```python
+result = create_explainer(
+    model, texts,
+    data_type="text",
+    max_vocab_size=1000
+)
+```
+
+## Project Structure
+
+```
+2821-final-project/
+├── src/
+│   ├── adapters/       # Plug-and-play model adapters
+│   │   ├── base.py           # Abstract interfaces
+│   │   ├── adapters.py       # Model adapters (sklearn, pytorch, etc.)
+│   │   ├── languages.py      # Observation languages (tabular, image, text)
+│   │   ├── universal_oracle.py
+│   │   └── factory.py        # create_explainer, ExplainabilityResult
+│   ├── core/           # Core logical reasoning
+│   │   ├── atoms.py          # Atom representation, unification
+│   │   ├── clauses.py        # Horn clauses
+│   │   ├── theory.py         # Theory (collection of clauses)
+│   │   └── resolution.py     # SLD resolution engine
+│   ├── inference/      # Model inference engine
+│   │   ├── algorithm.py      # Shapiro's Algorithm 2
+│   │   ├── oracle.py         # Oracle interface
+│   │   ├── backtracing.py    # Contradiction backtracing
+│   │   └── refinement.py     # Refinement operators
+│   ├── models/         # Neural network models
+│   ├── demos/          # Demo scripts
+│   └── utils/          # Visualization utilities
+├── tests/              # Unit tests
+└── notebooks/          # Jupyter notebooks
+```
+
+## How It Works
+
+1. **Model Adaptation**: The system wraps your model with an adapter that provides a unified prediction interface.
+
+2. **Observation Language**: Data is converted to logical atoms:
+   - `predict(instance, label)` - model predictions
+   - `feature(instance, name, value)` - feature values
+   - `has_word(instance, word)` - text tokens (for text data)
+   - `region_intensity(instance, region, level)` - image regions
+
+3. **Theory Learning**: Shapiro's algorithm iteratively:
+   - Removes contradictions (theory proves false facts)
+   - Adds refinements (theory can't prove true facts)
+   
+4. **Output**: Human-readable logical rules:
+   ```
+   predict(X, approved) :- feature(X, income, high), feature(X, credit, high).
+   predict(X, denied) :- feature(X, credit, low).
+   ```
+
+## Examples
+
+### Full Demo
+```bash
+python src/demos/plug_and_play_demo.py
+```
+
+### Loan Approval Demo
+```bash
+python src/demos/classification_demo.py
+```
+
+## API Reference
+
+### `create_explainer(model, X, **kwargs)`
+Create an explainer for any model.
+
+**Arguments:**
+- `model`: Any trained ML model
+- `X`: Input data (numpy array)
+- `feature_names`: Optional list of feature names
+- `label_names`: Optional list of class names
+- `data_type`: "tabular" | "image" | "text"
+- `max_instances`: Maximum instances to analyze (default: 100)
+- `discretize`: Discretize continuous features (default: True)
+
+**Returns:** `ExplainabilityResult`
+
+### `explain_model(model, X, **kwargs)`
+One-liner to get explanation string.
+
+### `ExplainabilityResult`
+- `.rules`: List of learned rules
+- `.summary()`: Human-readable summary
+- `.explain_prediction(id)`: Explain specific instance
+- `.compute_metrics()`: Calculate coverage, interpretability
+
+## Extending the System
+
+### Custom Model Adapter
+```python
+from src.adapters import ModelAdapter
+
+class MyAdapter(ModelAdapter):
+    def predict(self, instance):
+        return self.model.my_predict(instance)
+    
+    def predict_proba(self, instance):
+        return self.model.my_proba(instance)
+    
+    @property
+    def model_type(self):
+        return "custom"
+```
+
+### Custom Observation Language
+```python
+from src.adapters import ObservationLanguage
+
+class MyLanguage(ObservationLanguage):
+    def get_predicates(self):
+        return ["predict", "my_predicate"]
+    
+    def generate_instance_facts(self, instance_id, data, prediction, label):
+        # Convert data to atoms
+        return [...]
+    
+    def query_atom(self, atom, instances, predictions):
+        # Check if atom is true
+        return True/False
+```
 
 ## References
 
 Shapiro, E. Y. (1981). An Algorithm that Infers Theories from Facts. *IJCAI*, 446-451.
 
+## License
 
-MODEL PROGRESSION
-Reviewing the project to understand the current setup and suggest a model progression.
-
-
-[4 tools called]
-
-
-Checking the inference algorithm and model wrapper to understand the current capabilities:
-
-
-[3 tools called]
-
-
-Progression of models and use cases for your Shapiro Model Inference explainability system:
-
-## Model Progression (Increasing Complexity)
-
-### **Level 1: Simple Feedforward Neural Networks** (Current)
-**Architecture**: Basic MLP with 2-3 hidden layers  
-**Data/Use Cases**:
-- **Tabular classification**: Loan approval, credit scoring, medical diagnosis (binary/multiclass)
-- **Simple feature interactions**: Income + credit score → approval
-- **Low-dimensional data**: 4-10 features, clear decision boundaries
-
-**Why start here**: Simple decision boundaries, easy to interpret, good baseline
-
----
-
-### **Level 2: Deeper Feedforward Networks**
-**Architecture**: 4-6 hidden layers, batch normalization, dropout  
-**Data/Use Cases**:
-- **Higher-dimensional tabular**: 20-50 features (e.g., customer churn, fraud detection)
-- **Complex feature interactions**: Multiple interacting factors
-- **Noisy data**: Real-world datasets with missing values, outliers
-
-**Challenges**: Deeper networks learn more complex patterns; rules may be longer
-
----
-
-### **Level 3: Convolutional Neural Networks (CNNs)**
-**Architecture**: Conv layers, pooling, flatten → dense layers  
-**Data/Use Cases**:
-- **Image classification (small)**: MNIST, Fashion-MNIST, CIFAR-10
-- **Medical imaging**: X-ray classification, skin lesion detection
-- **Document classification**: Handwritten digits, simple OCR
-
-**Adaptation needed**: Convert image pixels to logical predicates (e.g., `pixel(x, y, value)`, `region(x, y, w, h, pattern)`)
-
----
-
-### **Level 4: Recurrent Neural Networks (RNNs/LSTMs)**
-**Architecture**: LSTM/GRU cells for sequence processing  
-**Data/Use Cases**:
-- **Time series classification**: ECG signals, sensor data, stock price patterns
-- **Text classification (simple)**: Sentiment analysis, spam detection
-- **Sequence prediction**: Next event prediction
-
-**Adaptation needed**: Temporal predicates (e.g., `at_time(t, feature, value)`, `precedes(event1, event2)`)
-
----
-
-### **Level 5: Transformer-based Models (Simplified)**
-**Architecture**: Attention mechanisms, encoder-only or small transformer  
-**Data/Use Cases**:
-- **Text classification**: News categorization, intent detection
-- **Structured text**: Legal document classification, code analysis
-- **Multi-modal (simple)**: Text + metadata classification
-
-**Adaptation needed**: Attention patterns as predicates (e.g., `attends_to(token1, token2, weight)`)
-
----
-
-### **Level 6: Graph Neural Networks (GNNs)**
-**Architecture**: Graph convolution, message passing  
-**Data/Use Cases**:
-- **Social networks**: Community detection, node classification
-- **Molecular data**: Drug discovery, chemical property prediction
-- **Knowledge graphs**: Entity classification, relation prediction
-
-**Adaptation needed**: Graph predicates (e.g., `connected(node1, node2)`, `has_feature(node, feature)`)
-
----
-
-### **Level 7: Ensemble Models**
-**Architecture**: Multiple models (NNs + tree-based)  
-**Data/Use Cases**:
-- **Hybrid systems**: Neural network + random forest ensemble
-- **Multi-model explanations**: Explaining ensemble decisions
-- **Production systems**: Real-world deployed models
-
-**Adaptation needed**: Meta-predicates combining multiple model outputs
-
----
-
-## Within Each Model: Data/Use Case Progression
-
-### **Phase A: Synthetic/Controlled Data**
-- Purpose: Validate the explainability system
-- Characteristics: Known ground-truth rules, clean data, controlled complexity
-- Example: Loan approval with explicit rules (income > X AND credit > Y)
-
-### **Phase B: Standard Benchmarks**
-- Purpose: Compare against known baselines
-- Characteristics: Public datasets, established metrics
-- Examples:
-  - **Tabular**: UCI datasets (Adult, Wine, Iris)
-  - **Images**: MNIST, CIFAR-10
-  - **Text**: IMDB sentiment, 20 Newsgroups
-
-### **Phase C: Real-World Applications**
-- Purpose: Test practical utility
-- Characteristics: Noisy, imbalanced, domain-specific
-- Examples:
-  - **Healthcare**: Medical diagnosis, drug interaction
-  - **Finance**: Fraud detection, risk assessment
-  - **Legal**: Document classification, case prediction
-
-### **Phase D: Edge Cases & Challenges**
-- Purpose: Stress test the system
-- Characteristics: Adversarial examples, distribution shift, rare patterns
-- Examples:
-  - **Adversarial robustness**: Explaining misclassifications
-  - **Out-of-distribution**: Explaining failures on new data
-  - **Rare classes**: Explaining minority class predictions
-
----
-
-## Recommended Learning Path
-
-1. **Start**: Simple NN + synthetic loan data (current)
-2. **Next**: Deeper NN + UCI Adult dataset (income prediction)
-3. **Then**: CNN + MNIST (digit classification)
-4. **Advanced**: LSTM + IMDB sentiment (text classification)
-5. **Research**: GNN + molecular data (if time permits)
-
-Each step should:
-- Validate that learned rules match expected patterns
-- Measure rule accuracy vs. model accuracy
-- Analyze rule complexity vs. model complexity
-- Document what patterns the system can/cannot capture
-
-Should I help implement support for any of these model types or create demo datasets for a specific level?
+MIT

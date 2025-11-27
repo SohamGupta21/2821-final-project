@@ -99,3 +99,4 @@ class Clause:
         body_str = ",\n" + indent_str + "    ".join(str(atom) for atom in self.body)
         return indent_str + head_str + " :-\n" + indent_str + "    " + body_str + "."
 
+

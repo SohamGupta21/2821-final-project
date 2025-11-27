@@ -177,3 +177,4 @@ def generate_facts_from_instances(
     
     return facts
 
+

@@ -15,11 +15,15 @@ from src.models.model_wrapper import (
 )
 from src.inference.algorithm import ModelInference
 from src.core.atoms import Atom, Constant
+from src.core.resolution import ResolutionEngine
 from src.utils.visualization import (
     plot_theory_evolution,
     display_rules,
     plot_rule_coverage,
-    plot_rule_accuracy
+    plot_rule_accuracy,
+    visualize_proof_tree,
+    print_proof_tree,
+    ProofTreeVisualizer
 )
 
 
@@ -36,14 +40,14 @@ def main():
     X, y, feature_names = generate_synthetic_loan_data(n_samples=500, random_state=42)
     print(f"  Generated {len(X)} samples with {len(feature_names)} features")
     print(f"  Features: {feature_names}")
-    print(f"  Class distribution: {np.bincount(y)}")
+    print(f"  Class distribution: {np.bincount(y)} (DENIED, APPROVED)")
     print()
     
     # Step 2: Train neural network
     print("Step 2: Training neural network classifier...")
     model = SimpleNNClassifier(input_size=len(feature_names), hidden_sizes=[32, 16])
-    history = model.train_model(X, y, epochs=50, verbose=True)
-    print(f"  Final validation accuracy: {history['val_acc'][-1]:.4f}")
+    train_history = model.train_model(X, y, epochs=50, verbose=True)
+    print(f"  Final validation accuracy: {train_history['val_acc'][-1]:.4f}")
     print()
     
     # Step 3: Create instances and oracle
@@ -54,18 +58,50 @@ def main():
     print(f"  Created {len(instances)} instances")
     print()
     
-    # Step 4: Generate observation facts
+    # Step 4: Generate observation facts (BOTH feature and predict facts)
     print("Step 4: Generating observation facts...")
-    # Use a subset for faster demo
-    train_indices = list(range(100))  # Use first 100 instances
+    # Use a stratified sample to ensure both labels are represented
+    np.random.seed(42)
+    
+    # Get predictions for all instances to stratify
+    all_predictions = []
+    for i in range(len(X)):
+        pred = model.predict(X[i:i+1])
+        all_predictions.append(pred)
+    
+    # Find indices for each class
+    approved_indices = [i for i, p in enumerate(all_predictions) if p == 1]
+    denied_indices = [i for i, p in enumerate(all_predictions) if p == 0]
+    
+    print(f"  Model predictions: {len(denied_indices)} DENIED, {len(approved_indices)} APPROVED")
+    
+    # Sample from each class
+    n_per_class = 50
+    sampled_approved = np.random.choice(approved_indices, min(n_per_class, len(approved_indices)), replace=False).tolist() if approved_indices else []
+    sampled_denied = np.random.choice(denied_indices, min(n_per_class, len(denied_indices)), replace=False).tolist() if denied_indices else []
+    
+    train_indices = sampled_approved + sampled_denied
+    np.random.shuffle(train_indices)
+    
     facts = generate_facts_from_instances(
         instances, model, feature_names, label_map, instance_ids=train_indices
     )
-    print(f"  Generated {len(facts)} facts")
     
-    # Filter to only predict facts for the main learning
+    # Count facts by type
+    feature_facts = [f for f in facts if f.predicate == "feature"]
     predict_facts = [f for f in facts if f.predicate == "predict"]
-    print(f"  Using {len(predict_facts)} prediction facts for learning")
+    
+    print(f"  Generated {len(facts)} total facts:")
+    print(f"    - {len(feature_facts)} feature facts")
+    print(f"    - {len(predict_facts)} prediction facts")
+    
+    # Show label distribution in predictions
+    approved_count = sum(1 for f in predict_facts 
+                        if len(f.arguments) >= 2 and 
+                        isinstance(f.arguments[1], Constant) and 
+                        f.arguments[1].value == "APPROVED")
+    denied_count = len(predict_facts) - approved_count
+    print(f"  Prediction distribution: {denied_count} DENIED, {approved_count} APPROVED")
     print()
     
     # Step 5: Run model inference
@@ -73,9 +109,11 @@ def main():
     print("  (This may take a few moments...)")
     print()
     
-    inference = ModelInference(oracle, max_iterations=20, max_theory_size=20)
-    theory = inference.infer_theory(iter(predict_facts))
+    # Pass ALL facts (features + predictions) for learning
+    inference = ModelInference(oracle, max_iterations=20, max_theory_size=20, verbose=True)
+    theory = inference.infer_theory(iter(facts))
     
+    print()
     print(f"  Learned theory with {len(theory)} clauses")
     print()
     
@@ -97,6 +135,71 @@ def main():
     # Rule accuracy
     plot_rule_accuracy(theory, test_facts, oracle)
     
+    # Step 8: Proof Tree Visualization
+    print()
+    print("Step 8: Proof Tree Visualizations...")
+    print()
+    
+    # To prove facts, we need to add feature facts to the theory as ground facts
+    # OR rely on the oracle to confirm them
+    engine = ResolutionEngine(max_depth=10)
+    proven_facts = []
+    
+    # First, let's test what the theory can prove with oracle support
+    print("  Testing provability with oracle...")
+    
+    for fact in predict_facts[:30]:
+        # Try to prove using the oracle for feature checks
+        can_prove = engine.can_prove(theory, fact, oracle=oracle.query)
+        if can_prove:
+            proven_facts.append(fact)
+            print(f"    ✓ Can prove: {fact}")
+        if len(proven_facts) >= 5:
+            break
+    
+    if not proven_facts:
+        # If no facts provable with oracle, create a theory with feature facts for visualization
+        print("  No facts provable with oracle alone.")
+        print("  Creating extended theory with feature facts for demonstration...")
+        
+        # Create a theory that includes feature facts as clauses
+        extended_theory = theory.copy()
+        
+        # Add some feature facts as ground clauses
+        for feat_fact in feature_facts[:50]:
+            from src.core.clauses import Clause
+            extended_theory.add_clause(Clause(feat_fact, []))
+        
+        # Now try to prove with the extended theory
+        for fact in predict_facts[:30]:
+            can_prove = engine.can_prove(extended_theory, fact, oracle=None)
+            if can_prove:
+                proven_facts.append((fact, extended_theory))
+                print(f"    ✓ Can prove with extended theory: {fact}")
+            if len(proven_facts) >= 3:
+                break
+    
+    if proven_facts:
+        print(f"\n  Visualizing proof trees for {len(proven_facts)} provable facts...")
+        
+        for i, item in enumerate(proven_facts):
+            if isinstance(item, tuple):
+                fact, use_theory = item
+            else:
+                fact = item
+                use_theory = theory
+            
+            print(f"\n  Proof {i+1}: {fact}")
+            print("-" * 50)
+            
+            # Print text version of proof tree
+            print_proof_tree(use_theory, fact, oracle if use_theory == theory else None)
+            
+            # Visual proof tree (matplotlib)
+            visualize_proof_tree(use_theory, fact, oracle if use_theory == theory else None, figsize=(12, 8))
+    else:
+        print("  No provable facts found to visualize.")
+    
     print()
     print("="*60)
     print("Demo complete!")
@@ -105,4 +208,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 

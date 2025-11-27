@@ -204,3 +204,4 @@ class NNOracle(Oracle):
         """Clear the prediction cache."""
         self._prediction_cache.clear()
 
+
