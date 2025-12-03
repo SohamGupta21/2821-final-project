@@ -8,12 +8,8 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from src.models.nn_model import SimpleNNClassifier, generate_synthetic_loan_data
-from src.models.model_wrapper import (
-    wrap_nn,
-    create_instances_from_data,
-    generate_facts_from_instances
-)
 from src.inference.algorithm import ModelInference
+from src.inference.oracle import NNOracle
 from src.core.atoms import Atom, Constant
 from src.core.resolution import ResolutionEngine
 from src.utils.visualization import (
@@ -25,6 +21,115 @@ from src.utils.visualization import (
     print_proof_tree,
     ProofTreeVisualizer
 )
+from typing import Dict, List, Any, Optional
+
+
+# Helper functions for legacy demo workflow
+def _create_instances_from_data(
+    X: np.ndarray,
+    feature_names: List[str],
+    discretize: bool = True,
+    bins: int = 3
+) -> Dict[int, Dict[str, Any]]:
+    """Create instance dictionaries from feature matrix."""
+    instances = {}
+    n_samples = X.shape[0]
+    
+    for i in range(n_samples):
+        instance_features = {}
+        for j, feature_name in enumerate(feature_names):
+            value = X[i, j]
+            if discretize:
+                if bins == 3:
+                    if value > 0.3:
+                        discrete_value = "high"
+                    elif value < -0.3:
+                        discrete_value = "low"
+                    else:
+                        discrete_value = "medium"
+                else:
+                    bin_edges = np.linspace(X[:, j].min(), X[:, j].max(), bins + 1)
+                    bin_idx = np.digitize(value, bin_edges) - 1
+                    discrete_value = f"bin_{bin_idx}"
+                instance_features[feature_name] = discrete_value
+            else:
+                instance_features[feature_name] = float(value)
+        instances[i] = instance_features
+    return instances
+
+
+def _wrap_nn(
+    model: SimpleNNClassifier,
+    instances: Dict[int, Dict[str, Any]],
+    feature_names: List[str],
+    label_map: Dict[str, int],
+    feature_value_map: Optional[Dict[str, Dict[str, float]]] = None
+) -> NNOracle:
+    """Wrap a neural network model as an oracle."""
+    class ModelWrapper:
+        def __init__(self, nn_model):
+            self.nn_model = nn_model
+        def predict(self, feature_vector: np.ndarray) -> int:
+            return self.nn_model.predict(feature_vector)
+    
+    return NNOracle(
+        model=ModelWrapper(model),
+        instances=instances,
+        feature_names=feature_names,
+        label_map=label_map,
+        feature_value_map=feature_value_map
+    )
+
+
+def _generate_facts_from_instances(
+    instances: Dict[int, Dict[str, Any]],
+    model: SimpleNNClassifier,
+    feature_names: List[str],
+    label_map: Dict[str, int],
+    instance_ids: Optional[List[int]] = None
+) -> List[Atom]:
+    """Generate observation facts from instances."""
+    facts = []
+    if instance_ids is None:
+        instance_ids = list(instances.keys())
+    
+    for instance_id in instance_ids:
+        if instance_id not in instances:
+            continue
+        
+        instance_features = instances[instance_id]
+        feature_vector = []
+        for feature_name in feature_names:
+            value = instance_features.get(feature_name, 0.0)
+            if isinstance(value, str):
+                value = float(hash(value) % 100) / 100.0
+            feature_vector.append(float(value))
+        
+        feature_vector = np.array(feature_vector).reshape(1, -1)
+        prediction = model.predict(feature_vector)
+        
+        label_name = None
+        for name, value in label_map.items():
+            if value == prediction:
+                label_name = name
+                break
+        
+        if label_name is None:
+            continue
+        
+        facts.append(Atom("predict", [Constant(instance_id), Constant(label_name)]))
+        
+        for feature_name, value in instance_features.items():
+            if isinstance(value, str):
+                facts.append(Atom("feature", [
+                    Constant(instance_id), Constant(feature_name), Constant(value)
+                ]))
+            else:
+                facts.append(Atom("feature", [
+                    Constant(instance_id), Constant(feature_name), Constant(float(value))
+                ]))
+    
+    return facts
 
 
 def main():
@@ -52,9 +157,9 @@ def main():
     
     # Step 3: Create instances and oracle
     print("Step 3: Setting up oracle...")
-    instances = create_instances_from_data(X, feature_names, discretize=True)
+    instances = _create_instances_from_data(X, feature_names, discretize=True)
     label_map = {"APPROVED": 1, "DENIED": 0}
-    oracle = wrap_nn(model, instances, feature_names, label_map)
+    oracle = _wrap_nn(model, instances, feature_names, label_map)
     print(f"  Created {len(instances)} instances")
     print()
     
@@ -83,7 +188,7 @@ def main():
     train_indices = sampled_approved + sampled_denied
     np.random.shuffle(train_indices)
     
-    facts = generate_facts_from_instances(
+    facts = _generate_facts_from_instances(
         instances, model, feature_names, label_map, instance_ids=train_indices
     )
     

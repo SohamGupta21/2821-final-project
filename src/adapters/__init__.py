@@ -1,5 +1,3 @@
-"""Model adapters and observation languages for plug-and-play explainability."""
-
 from .base import ModelAdapter, ObservationLanguage, PredicateSpec
 from .adapters import (
     SklearnAdapter,
@@ -38,4 +36,5 @@ __all__ = [
     "explain_model",
     "ExplainabilityResult",
 ]
+
 

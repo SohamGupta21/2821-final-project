@@ -1,11 +1,11 @@
 """Factory functions for easy plug-and-play explainability."""
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field
 import numpy as np
 
 from .base import ModelAdapter, ObservationLanguage
-from .adapters import detect_and_create_adapter, GenericAdapter
+from .adapters import detect_and_create_adapter
 from .languages import TabularObservationLanguage, ImageObservationLanguage, TextObservationLanguage
 from .universal_oracle import UniversalOracle
 from ..inference.algorithm import ModelInference
@@ -120,11 +120,8 @@ class ExplainabilityResult:
             
             for body_atom in rule.body:
                 # Substitute instance_id into body atom
-                # The rule uses variables like X for instance_id
-                substitution = {}
-                for var_name in ["X", "Instance", "Id", "I"]:
-                    substitution[Variable(var_name)] = Constant(instance_id)
-                
+                # The rule uses variable X for instance_id
+                substitution = {Variable("X"): Constant(instance_id)}
                 substituted = body_atom.apply_substitution(substitution)
                 
                 if not self.oracle.query(substituted):

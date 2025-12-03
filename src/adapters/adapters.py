@@ -6,19 +6,6 @@ from .base import ModelAdapter
 
 
 class GenericAdapter(ModelAdapter):
-    """
-    Generic adapter for any model with a predict method.
-    
-    Works with any object that has:
-    - predict(X) -> predictions
-    - optionally predict_proba(X) -> probabilities
-    
-    This is the fallback adapter when no specific adapter is detected.
-    
-    Example:
-        >>> adapter = GenericAdapter(my_model)
-        >>> prediction = adapter.predict(X[0])
-    """
     
     def __init__(
         self,
@@ -26,14 +13,6 @@ class GenericAdapter(ModelAdapter):
         predict_fn: Optional[Callable] = None,
         predict_proba_fn: Optional[Callable] = None
     ):
-        """
-        Initialize generic adapter.
-        
-        Args:
-            model: Any model object
-            predict_fn: Optional custom predict function (default: model.predict)
-            predict_proba_fn: Optional custom predict_proba function
-        """
         self.model = model
         self._predict_fn = predict_fn or getattr(model, 'predict', None)
         self._predict_proba_fn = predict_proba_fn or getattr(model, 'predict_proba', None)
@@ -42,7 +21,6 @@ class GenericAdapter(ModelAdapter):
             raise ValueError("Model must have a predict method or provide predict_fn")
     
     def predict(self, instance: Any) -> Any:
-        """Get prediction for instance."""
         if isinstance(instance, np.ndarray) and len(instance.shape) == 1:
             instance = instance.reshape(1, -1)
         result = self._predict_fn(instance)
@@ -51,7 +29,6 @@ class GenericAdapter(ModelAdapter):
         return result
     
     def predict_proba(self, instance: Any) -> Optional[np.ndarray]:
-        """Get prediction probabilities."""
         if self._predict_proba_fn is None:
             return None
         if isinstance(instance, np.ndarray) and len(instance.shape) == 1:
@@ -67,37 +44,18 @@ class GenericAdapter(ModelAdapter):
 
 
 class SklearnAdapter(ModelAdapter):
-    """
-    Adapter for scikit-learn models.
-    
-    Works with any fitted sklearn estimator (classifiers, regressors, etc.).
-    
-    Example:
-        >>> from sklearn.ensemble import RandomForestClassifier
-        >>> model = RandomForestClassifier().fit(X, y)
-        >>> adapter = SklearnAdapter(model)
-        >>> prediction = adapter.predict(X[0])
-    """
     
     def __init__(self, model: Any):
-        """
-        Initialize sklearn adapter.
-        
-        Args:
-            model: A fitted scikit-learn estimator
-        """
         self.model = model
         if not hasattr(model, 'predict'):
             raise ValueError("Model must have a predict method")
     
     def predict(self, instance: np.ndarray) -> Any:
-        """Get prediction for instance."""
         if len(instance.shape) == 1:
             instance = instance.reshape(1, -1)
         return self.model.predict(instance)[0]
     
     def predict_proba(self, instance: np.ndarray) -> Optional[np.ndarray]:
-        """Get prediction probabilities."""
         if not hasattr(self.model, 'predict_proba'):
             return None
         if len(instance.shape) == 1:
@@ -110,26 +68,8 @@ class SklearnAdapter(ModelAdapter):
 
 
 class PyTorchAdapter(ModelAdapter):
-    """
-    Adapter for PyTorch models.
-    
-    Works with any nn.Module that outputs class logits.
-    
-    Example:
-        >>> model = MyPyTorchModel()
-        >>> model.load_state_dict(torch.load("model.pt"))
-        >>> adapter = PyTorchAdapter(model)
-        >>> prediction = adapter.predict(X[0])
-    """
     
     def __init__(self, model: Any, device: str = "cpu"):
-        """
-        Initialize PyTorch adapter.
-        
-        Args:
-            model: A PyTorch nn.Module
-            device: Device to run inference on ("cpu" or "cuda")
-        """
         self.model = model
         self.device = device
         self.model.eval()
@@ -142,7 +82,6 @@ class PyTorchAdapter(ModelAdapter):
             raise ImportError("PyTorch is required for PyTorchAdapter. Install with: pip install torch")
     
     def predict(self, instance: Any) -> int:
-        """Get prediction for instance."""
         with self.torch.no_grad():
             if isinstance(instance, np.ndarray):
                 instance = self.torch.FloatTensor(instance)
@@ -153,7 +92,6 @@ class PyTorchAdapter(ModelAdapter):
             return self.torch.argmax(output, dim=1).item()
     
     def predict_proba(self, instance: Any) -> np.ndarray:
-        """Get prediction probabilities."""
         with self.torch.no_grad():
             if isinstance(instance, np.ndarray):
                 instance = self.torch.FloatTensor(instance)
@@ -170,36 +108,17 @@ class PyTorchAdapter(ModelAdapter):
 
 
 class TensorFlowAdapter(ModelAdapter):
-    """
-    Adapter for TensorFlow/Keras models.
-    
-    Works with any Keras model that outputs class probabilities.
-    
-    Example:
-        >>> from tensorflow import keras
-        >>> model = keras.models.load_model("model.h5")
-        >>> adapter = TensorFlowAdapter(model)
-        >>> prediction = adapter.predict(X[0])
-    """
     
     def __init__(self, model: Any):
-        """
-        Initialize TensorFlow adapter.
-        
-        Args:
-            model: A TensorFlow/Keras model
-        """
         self.model = model
     
     def predict(self, instance: np.ndarray) -> int:
-        """Get prediction for instance."""
         if len(instance.shape) == 1:
             instance = instance.reshape(1, -1)
         output = self.model.predict(instance, verbose=0)
         return int(np.argmax(output[0]))
     
     def predict_proba(self, instance: np.ndarray) -> np.ndarray:
-        """Get prediction probabilities."""
         if len(instance.shape) == 1:
             instance = instance.reshape(1, -1)
         output = self.model.predict(instance, verbose=0)
@@ -211,24 +130,6 @@ class TensorFlowAdapter(ModelAdapter):
 
 
 def detect_and_create_adapter(model: Any) -> ModelAdapter:
-    """
-    Auto-detect model type and create appropriate adapter.
-    
-    This function inspects the model object and its module to determine
-    the best adapter to use. Falls back to GenericAdapter if no specific
-    adapter matches.
-    
-    Args:
-        model: Any ML model
-        
-    Returns:
-        Appropriate ModelAdapter instance
-        
-    Example:
-        >>> from sklearn.ensemble import RandomForestClassifier
-        >>> model = RandomForestClassifier().fit(X, y)
-        >>> adapter = detect_and_create_adapter(model)  # Returns SklearnAdapter
-    """
     model_module = type(model).__module__
     model_class = type(model).__name__
     

@@ -79,4 +79,3 @@ class Theory:
                 matching.append(clause)
         return matching
 
-

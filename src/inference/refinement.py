@@ -156,42 +156,6 @@ class SpecializePredicateRefinement(RefinementOperator):
         return values
 
 
-class ConjunctionRefinement(RefinementOperator):
-    """
-    Refinement operator that adds conjunctions of existing conditions.
-    
-    Generates clauses with multiple feature conditions.
-    """
-    
-    def __init__(self, max_conjunctions: int = 2):
-        """Initialize with maximum number of conjunctions."""
-        self.max_conjunctions = max_conjunctions
-    
-    def refine(self, clause: Clause, oracle: Oracle, observed_facts: List[Atom]) -> List[Clause]:
-        """Generate refinements by adding conjunctions."""
-        refinements = []
-        
-        # Get existing feature atoms
-        feature_atoms = [
-            atom for atom in clause.body
-            if atom.predicate in ("feature", "has_feature")
-        ]
-        
-        if len(feature_atoms) >= self.max_conjunctions:
-            return refinements  # Already has enough conditions
-        
-        # Add combinations of feature atoms
-        # This is a simplified version - in practice, you'd want smarter selection
-        for fact in observed_facts[:10]:  # Limit to avoid explosion
-            if fact.predicate in ("feature", "has_feature"):
-                if fact not in clause.body:
-                    new_body = clause.body + [fact]
-                    new_clause = Clause(clause.head, new_body)
-                    refinements.append(new_clause)
-        
-        return refinements
-
-
 class CompositeRefinementOperator(RefinementOperator):
     """Composite refinement operator that combines multiple operators."""
     

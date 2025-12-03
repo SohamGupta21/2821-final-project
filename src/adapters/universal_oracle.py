@@ -7,22 +7,7 @@ from ..core.atoms import Atom
 from ..inference.oracle import Oracle
 
 
-class UniversalOracle(Oracle):
-    """
-    Universal oracle that combines any model adapter with any observation language.
-    
-    This is the key component enabling plug-and-play explainability. It:
-    1. Uses a ModelAdapter to get predictions from any model type
-    2. Uses an ObservationLanguage to convert data to logical atoms
-    3. Answers queries by delegating to the observation language
-    
-    Example:
-        >>> adapter = SklearnAdapter(sklearn_model)
-        >>> lang = TabularObservationLanguage(feature_names, label_names)
-        >>> oracle = UniversalOracle(adapter, lang, label_map)
-        >>> oracle.add_instances(instances)
-        >>> facts = oracle.generate_facts()
-    """
+class UniversalOracle(Oracle): # this helps us generate facts
     
     def __init__(
         self,
@@ -214,4 +199,5 @@ class UniversalOracle(Oracle):
         """Clear all instances and caches."""
         self._instances.clear()
         self.clear_cache()
+
 

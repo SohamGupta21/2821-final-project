@@ -464,16 +464,6 @@ class ModelInference:
         # Return (name, value) tuples for top features
         return [(name, value) for name, value, score in ranked if score > 0.5]
     
-    def _setup_default_refinement_operator(self) -> None:
-        """Set up default refinement operator based on observed facts."""
-        feature_names_list = list(self.feature_names)
-        feature_values_dict = {name: list(values) for name, values in self.feature_values.items()}
-        
-        add_condition = AddConditionRefinement(feature_names_list, feature_values_dict)
-        specialize = SpecializePredicateRefinement()
-        
-        self.refinement_operator = CompositeRefinementOperator([add_condition, specialize])
-    
     def get_history(self) -> List[Theory]:
         """Get the history of theory evolution."""
         return self.history.copy()

@@ -43,9 +43,8 @@ class Clause:
         return Clause(new_head, new_body)
     
     def get_variables(self) -> List[Variable]:
-        """Get all variables in this clause."""
-        variables = []
-        variables.extend(self.head.get_variables())
+        """Get all variables in this clause, preserving order and removing duplicates."""
+        variables = self.head.get_variables()
         for atom in self.body:
             variables.extend(atom.get_variables())
         # Remove duplicates while preserving order

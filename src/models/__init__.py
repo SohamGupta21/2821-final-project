@@ -1,10 +1,8 @@
-"""Neural network models and wrappers."""
+"""Neural network models for examples and demos."""
 
 from .nn_model import SimpleNNClassifier
-from .model_wrapper import wrap_nn
 
 __all__ = [
     "SimpleNNClassifier",
-    "wrap_nn",
 ]
 

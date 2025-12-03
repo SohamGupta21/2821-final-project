@@ -1,38 +1,17 @@
-"""Observation language implementations for different data types."""
 
-from typing import Any, List, Dict, Optional, Set, Union
+from typing import Any, List, Dict, Optional, Set
 import numpy as np
 import re
 from .base import ObservationLanguage, PredicateSpec
-from ..core.atoms import Atom, Constant, Variable
+from ..core.atoms import Atom, Constant
 
 
 def is_numeric(value: Any) -> bool:
-    """Check if a value is numeric (including numpy types)."""
     return isinstance(value, (int, float, np.integer, np.floating))
 
 
 class TabularObservationLanguage(ObservationLanguage):
-    """
-    Observation language for tabular/structured data.
-    
-    This is the most common observation language, suitable for:
-    - Classification on structured data
-    - Regression (discretized outputs)
-    - Any model with named features
-    
-    Predicates:
-    - predict(instance_id, label): Model prediction
-    - feature(instance_id, feature_name, value): Feature value (discretized)
-    - has_feature(instance_id, feature_name): Feature presence
-    
-    Example:
-        >>> lang = TabularObservationLanguage(
-        ...     feature_names=["age", "income"],
-        ...     label_names=["denied", "approved"]
-        ... )
-        >>> facts = lang.generate_instance_facts(0, {"age": 0.5, "income": 0.8}, 1, "approved")
-    """
+
     
     def __init__(
         self,
@@ -42,16 +21,7 @@ class TabularObservationLanguage(ObservationLanguage):
         bins: int = 3,
         bin_labels: Optional[List[str]] = None
     ):
-        """
-        Initialize tabular observation language.
-        
-        Args:
-            feature_names: List of feature names
-            label_names: List of class/label names
-            discretize: Whether to discretize continuous features
-            bins: Number of bins for discretization
-            bin_labels: Labels for bins (default: ["low", "medium", "high"])
-        """
+
         self.feature_names = feature_names
         self.label_names = label_names
         self.discretize = discretize
@@ -69,23 +39,12 @@ class TabularObservationLanguage(ObservationLanguage):
         ]
     
     def get_predicates(self) -> List[str]:
-        """Return list of predicates."""
         return ["predict", "feature", "has_feature"]
     
     def get_predicate_specs(self) -> List[PredicateSpec]:
-        """Return predicate specifications."""
         return self._predicate_specs
     
     def fit_discretizer(self, X: np.ndarray) -> None:
-        """
-        Fit discretization thresholds based on data.
-        
-        Uses percentiles (33rd and 66th) to create bins that
-        roughly split data into thirds.
-        
-        Args:
-            X: Training data matrix (n_samples, n_features)
-        """
         for i, name in enumerate(self.feature_names):
             if i >= X.shape[1]:
                 break
@@ -100,16 +59,6 @@ class TabularObservationLanguage(ObservationLanguage):
             }
     
     def discretize_value(self, feature_name: str, value: float) -> str:
-        """
-        Discretize a continuous value into bins.
-        
-        Args:
-            feature_name: Name of the feature
-            value: Continuous value to discretize
-            
-        Returns:
-            Bin label (e.g., "low", "medium", "high")
-        """
         if feature_name not in self._feature_stats:
             # Fallback: simple discretization based on sign/magnitude
             if value > 0.3:
@@ -132,7 +81,6 @@ class TabularObservationLanguage(ObservationLanguage):
         prediction: Any,
         label_name: str
     ) -> List[Atom]:
-        """Generate facts for a tabular instance."""
         facts = []
         id_const = Constant(instance_id)
         
@@ -159,7 +107,6 @@ class TabularObservationLanguage(ObservationLanguage):
         return facts
     
     def query_atom(self, atom: Atom, instances: Dict[Any, Any], predictions: Dict[Any, Any]) -> bool:
-        """Check if a tabular atom is true."""
         if not atom.is_ground():
             return False
         
@@ -209,27 +156,6 @@ class TabularObservationLanguage(ObservationLanguage):
 
 
 class ImageObservationLanguage(ObservationLanguage):
-    """
-    Observation language for image data.
-    
-    Converts images to logical predicates by analyzing:
-    - Overall intensity (brightness/darkness)
-    - Region-based intensity patterns
-    - Simple texture features
-    
-    Predicates:
-    - predict(instance_id, label): Model prediction
-    - is_dark(instance_id): Image is predominantly dark
-    - is_bright(instance_id): Image is predominantly bright
-    - region_intensity(instance_id, region, level): Region intensity level
-    
-    Example:
-        >>> lang = ImageObservationLanguage(
-        ...     label_names=["0", "1", "2", ..., "9"],  # MNIST
-        ...     image_size=(28, 28),
-        ...     grid_size=4
-        ... )
-    """
     
     def __init__(
         self,
@@ -238,15 +164,6 @@ class ImageObservationLanguage(ObservationLanguage):
         grid_size: int = 4,
         intensity_levels: int = 3
     ):
-        """
-        Initialize image observation language.
-        
-        Args:
-            label_names: List of class names
-            image_size: Expected image dimensions (H, W)
-            grid_size: Grid divisions for region analysis (creates grid_size x grid_size regions)
-            intensity_levels: Number of intensity levels (default 3: low/medium/high)
-        """
         self.label_names = label_names
         self.image_size = image_size
         self.grid_size = grid_size
@@ -254,19 +171,9 @@ class ImageObservationLanguage(ObservationLanguage):
         self.intensity_labels = ["low", "medium", "high"][:intensity_levels]
     
     def get_predicates(self) -> List[str]:
-        """Return list of predicates."""
         return ["predict", "is_dark", "is_bright", "region_intensity", "has_content"]
     
     def _analyze_image(self, image: np.ndarray) -> Dict[str, Any]:
-        """
-        Analyze image to extract logical features.
-        
-        Args:
-            image: Image array (H, W) or (H, W, C)
-            
-        Returns:
-            Dictionary of extracted features
-        """
         features = {}
         
         # Handle different image formats
@@ -322,7 +229,6 @@ class ImageObservationLanguage(ObservationLanguage):
         prediction: Any,
         label_name: str
     ) -> List[Atom]:
-        """Generate facts for an image instance."""
         facts = []
         id_const = Constant(instance_id)
         
@@ -349,7 +255,6 @@ class ImageObservationLanguage(ObservationLanguage):
         return facts
     
     def query_atom(self, atom: Atom, instances: Dict[Any, Any], predictions: Dict[Any, Any]) -> bool:
-        """Check if an image atom is true."""
         if not atom.is_ground():
             return False
         
@@ -394,27 +299,6 @@ class ImageObservationLanguage(ObservationLanguage):
 
 
 class TextObservationLanguage(ObservationLanguage):
-    """
-    Observation language for text data.
-    
-    Converts text to logical predicates by analyzing:
-    - Word/token presence
-    - Text length characteristics
-    - Simple patterns
-    
-    Predicates:
-    - predict(instance_id, label): Model prediction
-    - has_word(instance_id, word): Text contains word
-    - word_count_level(instance_id, level): Text length category
-    - is_short(instance_id): Text is short
-    - is_long(instance_id): Text is long
-    
-    Example:
-        >>> lang = TextObservationLanguage(
-        ...     label_names=["negative", "positive"],
-        ...     vocabulary={"good", "bad", "great", "terrible"}
-        ... )
-    """
     
     def __init__(
         self,
@@ -423,15 +307,6 @@ class TextObservationLanguage(ObservationLanguage):
         max_vocab_size: int = 1000,
         min_word_freq: int = 2
     ):
-        """
-        Initialize text observation language.
-        
-        Args:
-            label_names: List of class names
-            vocabulary: Optional fixed vocabulary (auto-built if not provided)
-            max_vocab_size: Maximum vocabulary size for auto-building
-            min_word_freq: Minimum word frequency for vocabulary
-        """
         self.label_names = label_names
         self.vocabulary = vocabulary or set()
         self.max_vocab_size = max_vocab_size
@@ -445,19 +320,9 @@ class TextObservationLanguage(ObservationLanguage):
         return ["predict", "has_word", "word_count_level", "is_short", "is_long"]
     
     def _tokenize(self, text: str) -> List[str]:
-        """
-        Simple tokenization.
-        
-        Args:
-            text: Input text
-            
-        Returns:
-            List of lowercase tokens
-        """
         return re.findall(r'\b\w+\b', text.lower())
     
     def update_vocabulary(self, tokens: List[str]) -> None:
-        """Update vocabulary from observed tokens."""
         for token in tokens:
             self._word_counts[token] = self._word_counts.get(token, 0) + 1
         
@@ -480,7 +345,6 @@ class TextObservationLanguage(ObservationLanguage):
         prediction: Any,
         label_name: str
     ) -> List[Atom]:
-        """Generate facts for a text instance."""
         facts = []
         id_const = Constant(instance_id)
         
@@ -520,7 +384,6 @@ class TextObservationLanguage(ObservationLanguage):
         return facts
     
     def query_atom(self, atom: Atom, instances: Dict[Any, Any], predictions: Dict[Any, Any]) -> bool:
-        """Check if a text atom is true."""
         if not atom.is_ground():
             return False
         

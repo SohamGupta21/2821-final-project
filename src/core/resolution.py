@@ -126,33 +126,28 @@ class ResolutionEngine:
                 return True
             else:
                 # Rule clause - need to prove body
-                # Create child nodes for each body atom
-                child_node = ProofNode(
-                    goal=goal_substituted,
-                    substitution=new_substitution,
-                    clause=clause_standardized,
-                    parent=node,
-                    depth=node.depth + 1
-                )
-                node.children.append(child_node)
-                
-                # Try to prove each body atom
+                # Create body nodes and try to prove them
+                body_nodes = []
                 all_proven = True
+                
                 for body_atom in clause_standardized.body:
                     body_substituted = body_atom.apply_substitution(new_substitution)
                     body_node = ProofNode(
                         goal=body_substituted,
                         substitution=new_substitution,
-                        parent=child_node,
-                        depth=node.depth + 2
+                        parent=node,
+                        depth=node.depth + 1
                     )
-                    child_node.children.append(body_node)
+                    body_nodes.append(body_node)
                     
                     if not self._prove_recursive(theory, body_node, oracle):
                         all_proven = False
                         break
                 
                 if all_proven:
+                    # Only attach clause and children if proof succeeds
+                    node.clause = clause_standardized
+                    node.children.extend(body_nodes)
                     return True
         
         # If we have an oracle and goal is ground, and no rules matched, return False
@@ -204,5 +199,4 @@ class ResolutionEngine:
                 return True
         
         return False
-
 

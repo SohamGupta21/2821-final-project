@@ -1,7 +1,6 @@
 """Visualization utilities for rule evolution, display, and proof trees."""
 
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 from typing import List, Dict, Optional, Tuple, Any
 from ..core.theory import Theory
 from ..core.clauses import Clause

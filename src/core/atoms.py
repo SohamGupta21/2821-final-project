@@ -1,7 +1,7 @@
 """Atom representation and unification algorithm."""
 
 from dataclasses import dataclass
-from typing import List, Optional, Dict, Any, Union
+from typing import List, Optional, Dict, Any
 from abc import ABC, abstractmethod
 
 
